@@ -1,0 +1,165 @@
+import streamlit as st
+import pandas as pd
+from random import randint
+
+# -----------------------------
+# Setup
+# -----------------------------
+proteins = ["A", "T", "G", "C"]
+
+
+# def load_data(chain=25):
+#      dna_seq = []
+#      for _ in range(chain):
+#          dna_seq.append(proteins[randint(0, 3)])
+#      return dna_seq
+
+@st.cache_data
+def load_data(chain=25):
+    # Create fake organisms with random DNA
+    organisms = ["Human", "Mouse", "Bacteria", "Virus"]
+    data = []
+    for org in organisms:
+        dna_seq = "".join([proteins[randint(0, 3)] for _ in range(chain)])
+        data.append({"organism": org, "dna_sequence": dna_seq})
+    return pd.DataFrame(data)
+
+df = load_data()
+
+st.title("🧬 PCR Simulator: Detect, Cut & Clone DNA")
+st.write("This PCR simulator can create, analyze, and clone DNA sequences.")
+
+# -----------------------------
+# User selects organism + pathogen
+# -----------------------------
+organisms = df["organism"].tolist()
+org_choice = st.selectbox("Choose an organism:", organisms)
+org_dna = df.loc[df["organism"] == org_choice, "dna_sequence"].values[0]
+
+pathogens = [x for x in organisms if x != org_choice]
+path_choice = st.selectbox("Choose a virus/bacteria:", pathogens)
+path_dna = df.loc[df["organism"] == path_choice, "dna_sequence"].values[0]
+
+st.markdown("---")
+st.write(f"**{org_choice}'s DNA:** {org_dna}")
+st.write(f"**{path_choice} DNA:** {path_dna}")
+
+# -----------------------------
+# Functions (adapted from your code)
+# -----------------------------
+def perform_denat(dna_seq):
+    """Denaturation step"""
+    defec = dna_seq.count("*")
+    ndefec = len(dna_seq) - defec
+    if ndefec == 0 or (defec / ndefec) > 0.25:
+        return None, "Denaturation failed ❌ (too many defective bases)"
+    return dna_seq, "Denaturation successful ✅"
+
+def get_complement(dna_seq):
+    comp_dna_seq = []
+    for protein in dna_seq:
+        if protein == "A":
+            comp_dna_seq.append("T")
+        elif protein == "T":
+            comp_dna_seq.append("A")
+        elif protein == "G":
+            comp_dna_seq.append("C")
+        elif protein == "C":
+            comp_dna_seq.append("G")
+        else:
+            comp_dna_seq.append("*")
+    return "".join(comp_dna_seq)
+
+def perform_anl(comp_dna_seq_str, primer):
+    """Annealing step"""
+    if primer in comp_dna_seq_str:
+        clone_point = comp_dna_seq_str.find(primer)
+        return clone_point, "Annealing successful ✅ (primer attached)"
+    else:
+        return None, "Annealing failed ❌ (primer not found)"
+
+def perform_ext(comp_dna_seq, clone_point):
+    """Extension step"""
+    clone_dna = "".join(comp_dna_seq[clone_point:])
+    if "*" in clone_dna:
+        error_point = clone_dna.find("*")
+        clone_dna_fin = clone_dna[:error_point]
+        return clone_dna_fin, "Extension successful ✅ (errors removed)"
+    else:
+        return clone_dna, "Extension successful ✅"
+
+# -----------------------------
+# PCR Workflow
+# -----------------------------
+# if st.button("🔬 Run PCR Check"):
+#     # Step 1: Denaturation
+#     dna_seq = list(org_dna)
+#     dna_seq, msg = perform_denat(dna_seq)
+#     st.info("Step 1: Denaturation")
+#     st.write(msg)
+
+#     if dna_seq:
+#         comp_dna_seq_str = get_complement(dna_seq)
+#         st.success(f"Complementary DNA: {comp_dna_seq_str}")
+
+#         # Infection check
+#         if path_dna in org_dna:
+#             st.error(f"Infection detected! {path_choice} DNA found inside {org_choice}.")
+#             cured_dna = org_dna.replace(path_dna, "")
+#             st.success(f"Pathogen DNA removed. Cured DNA: {cured_dna}")
+
+#             # Step 2: Annealing (use pathogen DNA as primer)
+#             clone_point, msg = perform_anl(comp_dna_seq_str, path_dna)
+#             st.info("Step 2: Annealing")
+#             st.write(msg)
+
+#             if clone_point is not None:
+#                 # Step 3: Extension
+#                 req_dna, msg = perform_ext(list(comp_dna_seq_str), clone_point)
+#                 st.info("Step 3: Extension")
+#                 st.write(msg)
+
+#                 cycles = st.slider("How many cycles?", 1, 10, 3)
+#                 st.success(f"Generated {cycles} clones:")
+#                 for i in range(cycles):
+#                     st.text(f"Clone {i+1}: {req_dna}")
+#         else:
+#             st.success("No infection detected 🎉")
+
+cycles = st.slider("How many cycles?", 1, 10, 3)  # define outside
+
+if st.button("🔬 Run PCR Check"):
+    # Step 1: Denaturation
+    dna_seq = list(org_dna)
+    dna_seq, msg = perform_denat(dna_seq)
+    st.info("Step 1: Denaturation")
+    st.write(msg)
+
+    if dna_seq:
+        comp_dna_seq_str = get_complement(dna_seq)
+        st.success(f"Complementary DNA: {comp_dna_seq_str}")
+
+        # Infection check
+        if path_dna in org_dna:
+            st.error(f"Infection detected! {path_choice} DNA found inside {org_choice}.")
+            cured_dna = org_dna.replace(path_dna, "")
+            st.success(f"Pathogen DNA removed. Cured DNA: {cured_dna}")
+
+            # Step 2: Annealing
+            clone_point, msg = perform_anl(comp_dna_seq_str, path_dna)
+            st.info("Step 2: Annealing")
+            st.write(msg)
+
+            if clone_point is not None:
+                # Step 3: Extension
+                req_dna, msg = perform_ext(list(comp_dna_seq_str), clone_point)
+                st.info("Step 3: Extension")
+                st.write(msg)
+
+                st.success(f"Generated {cycles} clones:")
+                for i in range(cycles):
+                    st.text(f"Clone {i+1}: {req_dna}")
+        else:
+            st.success("No infection detected 🎉")
+
+
